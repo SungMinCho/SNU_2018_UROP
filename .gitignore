@@ -1,0 +1,5 @@
+.DS_Store
+tf_practice/
+__pycache__/
+logs/
+models/
