@@ -25,4 +25,9 @@ class Model():
   def save(self):
     if not os.path.exists(self.save_dir):
       os.makedirs(self.save_dir)
-    self.model.save(os.path.join(self.save_dir, self.name+'.h5'))
+    self.model.save_weights(os.path.join(self.save_dir, self.name+'.h5'))
+
+  def load(self):
+    path = os.path.join(self.save_dir, self.name+'.h5')
+    if os.path.exists(path):
+      self.model.load_weights(path)
