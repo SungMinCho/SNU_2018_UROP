@@ -83,4 +83,4 @@ class Distill:
       vx, vy = validation_data
       validation_data = (vx, self.preprocess_data(vx, vy))
 
-    self.student.train(x_train, y_train_new, batch_size, epochs, callbacks, validation_data)
+    return self.student.train(x_train, y_train_new, batch_size, epochs, callbacks, validation_data)

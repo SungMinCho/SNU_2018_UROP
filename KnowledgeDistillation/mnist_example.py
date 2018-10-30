@@ -49,16 +49,6 @@ def build_student_model():
 
   return model
 
-def train(model, xd, yd, xt, yt):
-  tbCb = keras.callbacks.TensorBoard('Graph')
-
-  model.fit(xd, yd,
-            batch_size=128,
-            epochs=1,
-            validation_data=(xt,yt),
-            callbacks=[tbCb])
-
-
 def main():
   xd,yd,xt,yt = load_data()
 

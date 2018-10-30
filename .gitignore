@@ -3,3 +3,4 @@ tf_practice/
 __pycache__/
 logs/
 models/
+.ipynb_checkpoints/

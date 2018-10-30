@@ -16,7 +16,7 @@ class Model():
     self.fn_compile(self.model)
 
   def train(self, x_train, y_train, batch_size=128, epochs=1, callbacks=[], validation_data=None):
-    self.model.fit(x_train, y_train,
+    return self.model.fit(x_train, y_train,
               batch_size=batch_size,
               epochs=epochs,
               validation_data=validation_data,
