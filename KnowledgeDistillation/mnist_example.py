@@ -73,8 +73,8 @@ def main():
   student.save()
 
   student2 = Model(build_student_model, "student2", fn_compile)
-  distill = Distill(teacher, student, 10, 5.0, 0.07)
-  distill.teach(xd, yd, 128, 5, callbacks, (xt,yt))
+  distill = Distill(teacher, student2, 10, 5.0, 0.07)
+  distill.teach(xd, yd, 128, 1, callbacks, (xt,yt))
 
 
 if __name__=='__main__':
