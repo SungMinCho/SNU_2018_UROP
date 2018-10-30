@@ -31,3 +31,5 @@ class Model():
     path = os.path.join(self.save_dir, self.name+'.h5')
     if os.path.exists(path):
       self.model.load_weights(path)
+    else:
+      print("Path doesn't exist")

@@ -5,6 +5,7 @@ from tensorflow.keras.losses import categorical_crossentropy as logloss
 from tensorflow.keras.metrics import categorical_accuracy, top_k_categorical_accuracy
 from model import Model
 import numpy as np
+import os
 
 # Reference
 # https://github.com/TropComplique/knowledge-distillation-keras/blob/master/knowledge_distillation_for_mobilenet.ipynb
@@ -57,15 +58,24 @@ class Distill:
     y_pred_soft = y_pred[:, self.num_class:]
     return logloss(y_true_soft, y_pred_soft)
 
-  def preprocess_data(self, x_train, y_train):
+  def preprocess_data(self, x_train, y_train, save_at=None):
     shape = y_train.shape
     y_train_new = np.ndarray((shape[0], shape[1]*2))
+    print('preprocessing data')
     for i in range(len(y_train)):
       y_train_new[i] = self.teacher_model.predict(np.expand_dims(x_train[i],axis=0))[0]
+      print("%.2f%%" % (i/len(y_train)*100), end='\r')
+    print('Preprocessing done')
+    if save_at is not None:
+      dirname = os.path.dirname(save_at)
+      if not os.path.exists(dirname):
+        os.makedirs(dirname)
+      np.save(save_at, y_train_new)
     return y_train_new
 
 
-  def teach(self, x_train, y_train, batch_size=128, epochs=1, callbacks=[], validation_data=None):
+  def teach(self, x_train, y_train, batch_size=128, epochs=1, callbacks=[],
+            validation_data=None, pre_processed=False):
     metrics=[self.accuracy,
              self.top_5_accuracy,
              self.categorical_crossentropy,
@@ -78,9 +88,10 @@ class Distill:
       #loss=lambda y_true, y_pred: self.distill_loss(y_true, y_pred),
       metrics=metrics)
 
-    y_train_new = self.preprocess_data(x_train, y_train)
-    if validation_data != None:
-      vx, vy = validation_data
-      validation_data = (vx, self.preprocess_data(vx, vy))
+    if not pre_processed:
+      y_train = self.preprocess_data(x_train, y_train)
+      if validation_data != None:
+        vx, vy = validation_data
+        validation_data = (vx, self.preprocess_data(vx, vy))
 
-    return self.student.train(x_train, y_train_new, batch_size, epochs, callbacks, validation_data)
+    return self.student.train(x_train, y_train, batch_size, epochs, callbacks, validation_data)
