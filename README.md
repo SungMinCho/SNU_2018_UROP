@@ -9,6 +9,7 @@
 * [DeepX : A Software Accelerator for Low-Power Deep Learning Inference on Mobile Devices](https://ix.cs.uoregon.edu/~jiao/papers/ipsn16.pdf)
 * [DeepMon: Mobile GPU-based Deep Learning Framework for Continuous Vision Applications](https://nsr.cse.buffalo.edu/mobisys_2017/papers/pdfs/mobisys17-paper07.pdf)
 * [Deep Learning for the Internet of Things](https://cse.buffalo.edu/~lusu/papers/Computer2018.pdf)
+* [A Gift from Knowledge Distillation: Fast Optimization, Network Minimization and Transfer Learning](http://openaccess.thecvf.com/content_cvpr_2017/papers/Yim_A_Gift_From_CVPR_2017_paper.pdf)
 * and possibly more... (will add later)
 
 ## Framework
