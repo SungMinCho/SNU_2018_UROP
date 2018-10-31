@@ -17,12 +17,17 @@ class Distill:
     self.temperature = temperature
     self.lambda_const = lambda_const
     # just keras model
-    self.teacher_model = self.ready_for_lecture(teacher.model)
+    self.teacher_model = self.teacher_ready_for_lecture(teacher.model)
     self.student = student
-    self.student.model = self.ready_for_lecture(self.student.model)
+    self.student.model = self.student_ready_for_lecture(self.student.model)
 
+  def teacher_ready_for_lecture(self, model):
+    logits = model.layers[-2].output
+    logits_T = Lambda(lambda x : x / self.temperature)(logits)
+    output = Activation('softmax')(logits_T)
+    return keras.Model(model.input, output)
 
-  def ready_for_lecture(self, model):
+  def student_ready_for_lecture(self, model):
     # Right now we assume model's last layer is just activation layer
     logits = model.layers[-2].output
     prob = Activation('softmax')(logits)
@@ -63,7 +68,8 @@ class Distill:
     y_train_new = np.ndarray((shape[0], shape[1]*2))
     print('preprocessing data')
     for i in range(len(y_train)):
-      y_train_new[i] = self.teacher_model.predict(np.expand_dims(x_train[i],axis=0))[0]
+      prob_T = self.teacher_model.predict(np.expand_dims(x_train[i],axis=0))[0]
+      y_train_new[i] = np.concatenate([y_train[i], prob_T])
       print("%.2f%%" % (i/len(y_train)*100), end='\r')
     print('Preprocessing done')
     if save_at is not None:
