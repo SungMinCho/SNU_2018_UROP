@@ -32,6 +32,10 @@ void log_operand(Operand o) {
   __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "dimensionCount");
   __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, std::to_string(o.type.dimensionCount).c_str());
 
+
+  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "dimensions");
+  for(int i = 0; i < o.type.dimensionCount; i++)
+      __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, std::to_string(o.type.dimensions[i]).c_str());
   __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "operandCode");
   __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, std::to_string(o.operandCode).c_str());
 }
@@ -41,10 +45,16 @@ Operand::Operand(vector<uint32_t> dim, uint32_t index, OperandCode operandCode)
 Operand::Operand(vector<uint32_t> dim_, uint32_t index_, OperandCode operandCode_, size_t offset_, size_t length_) 
   : dim(dim_), index(index_), operandCode(operandCode_), offset(offset_), length(length_) {
     uint32_t dimCount = dim.size();
+    if(dimCount == 0) dim_array = nullptr;
+    else {
+        dim_array = new uint32_t[dimCount];
+        for(int i = 0; i < dimCount; i++) dim_array[i] = dim[i];
+    }
+
     type = {
       .type = operandCode_,
       .dimensionCount = dimCount,
-      .dimensions = &dim[0],
+      .dimensions = dim_array,
       .scale = 0.0f,
       .zeroPoint = 0
     };
@@ -106,7 +116,6 @@ void ModelBuilder::parse(size_t size, int protect, int fd, size_t offset) {
     operands.push_back(b1_operand);
     operands.push_back(activation_operand);
     operands.push_back(output_operand);
-
 
     vector<Operand> fc1_inputs;
     fc1_inputs.push_back(input_operand);
@@ -174,7 +183,7 @@ bool ModelBuilder::CreateCompiledModel() {
 
     for(Operand o : operands) {
       indexDict[o.index] = opIndex++;
-      //log_operand(o);
+
       status = ANeuralNetworksModel_addOperand(model_, &o.type);
       if(!checkStatus(status, "add operand failed")) return false;
 
@@ -184,6 +193,7 @@ bool ModelBuilder::CreateCompiledModel() {
          if(!checkStatus(status, "set operand value from memory failed")) return false;
       }
       else {
+          if(o.index == input_index || o.index == output_index) continue;
           if(o.index == 3) {
             // naively take care of activation
             FuseCode fusedActivationCodeValue = ANEURALNETWORKS_FUSED_NONE;
@@ -191,11 +201,12 @@ bool ModelBuilder::CreateCompiledModel() {
                 &fusedActivationCodeValue, sizeof(fusedActivationCodeValue));
             continue;
           }
-          int len = o.dataLength();
+          int len = o.byteLength();
           // random
-          float buffer[len];
-          ANeuralNetworksModel_setOperandValue(model_, indexDict[o.index],
-          buffer, len);
+          char buffer[len];
+          status = ANeuralNetworksModel_setOperandValue(model_, indexDict[o.index],
+              buffer, len);
+          if(!checkStatus(status, "set operand value failed")) return false;
       }
     }
 

@@ -32,6 +32,7 @@ public:
     ~Operand() {};
 
     vector<uint32_t> dim;
+    uint32_t* dim_array;
     ANeuralNetworksOperandType type;
     uint32_t index;
     OperandCode operandCode;
