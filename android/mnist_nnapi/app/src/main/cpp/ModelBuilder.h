@@ -24,24 +24,18 @@
 
 using std::vector;
 
-class Dim {
-public:
-    explicit Dim(vector<uint32_t> dims);
-    ~Dim();
-
-    vector<uint32_t> dims;
-};
-
 class Operand {
 public:
-    explicit Operand(Dim dim, ANeuralNetworksOperandType type, uint32_t index);
-    explicit Operand(Dim dim, ANeuralNetworksOperandType type, uint32_t index, size_t offset, size_t length);
-    ~Operand();
+    Operand() {};
+    explicit Operand(vector<uint32_t> dim, uint32_t index, OperandCode operandCode);
+    explicit Operand(vector<uint32_t> dim, uint32_t index, OperandCode operandCode, size_t offset, size_t length);
+    ~Operand() {};
 
-    Dim dim;
+    vector<uint32_t> dim;
     ANeuralNetworksOperandType type;
     uint32_t index;
-    // offset >= 0 means it's a constant whose value is in memory (offset ~ offset + length)
+    OperandCode operandCode;
+    // offset = -1 means it's a constant whose value is in memory (offset ~ offset + length)
     size_t offset;
     size_t length;
 
@@ -51,8 +45,9 @@ public:
 
 class Operation {
 public:
+    Operation() {};
     explicit Operation(ANeuralNetworksOperationType operationType, vector<Operand> inputs, Operand output);
-    ~Operation();
+    ~Operation() {};
 
     ANeuralNetworksOperationType operationType;
     vector<Operand> inputs;
@@ -60,22 +55,13 @@ public:
 };
 
 
-class ModelParser {
-public:
-    explicit ModelParser(size_t size, int protect, int fd, size_t offset);
-
-    vector<Operand> operands;
-    vector<Operation> operations;
-    Operand input_operand;
-    Operand output_operand;
-};
-
 // Right now suppose there is only one input (like image classification)
 class ModelBuilder {
 public:
     explicit ModelBuilder(size_t size, int protect, int fd, size_t offset);
     ~ModelBuilder();
 
+		void parse(size_t size, int protect, int fd, size_t offset);
     bool CreateCompiledModel();
     // Rigiht now we suppose input = float[] , output = float[]
     bool Compute(float* input, float* output);

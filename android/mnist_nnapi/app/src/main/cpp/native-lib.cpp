@@ -1,10 +1,11 @@
 #include <jni.h>
 #include <string>
+#include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
 #include <android/sharedmem.h>
 #include <sys/mman.h>
-#include "simple_model.h"
+#include "ModelBuilder.h"
 
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -38,9 +39,9 @@ Java_me_sungmincho_mnist_1nnapi_models_NNAPIClassifier_initModel(
     if (fd < 0) {
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
                             "Failed to open the model_data file descriptor.");
-        return 0;
+        //return 0;
     }
-    SimpleModel* nn_model = new SimpleModel(length, PROT_READ, fd, offset);
+    ModelBuilder* nn_model = new ModelBuilder(length, PROT_READ, fd, offset);
     if (!nn_model->CreateCompiledModel()) {
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
                             "Failed to prepare the model.");
@@ -51,17 +52,26 @@ Java_me_sungmincho_mnist_1nnapi_models_NNAPIClassifier_initModel(
 }
 
 extern "C"
-JNIEXPORT jfloat
+JNIEXPORT jfloatArray
 JNICALL
 Java_me_sungmincho_mnist_1nnapi_models_NNAPIClassifier_startCompute(
         JNIEnv *env,
         jobject /* this */,
         jlong _nnModel,
-        jfloat inputValue1,
-        jfloat inputValue2) {
-    SimpleModel* nn_model = (SimpleModel*) _nnModel;
-    float result = 0.0f;
-    nn_model->Compute(inputValue1, inputValue2, &result);
+        jfloatArray inputArray) {
+    ModelBuilder* nn_model = (ModelBuilder*) _nnModel;
+    float input[784];
+    jfloat* input_jfloat = env->GetFloatArrayElements(inputArray, 0);
+    for(int i = 0; i < 784; i++) {
+        input[i] = input_jfloat[i];
+    }
+
+    jfloatArray result;
+    result = env->NewFloatArray(10);
+    if(result == NULL) return NULL;
+    float result_array[10];
+    nn_model->Compute(input, result_array);
+    env->SetFloatArrayRegion(result, 0, 10, result_array);
     return result;
 }
 
@@ -72,6 +82,6 @@ Java_me_sungmincho_mnist_1nnapi_models_NNAPIClassifier_destroyModel(
         JNIEnv *env,
         jobject /* this */,
         jlong _nnModel) {
-    SimpleModel* nn_model = (SimpleModel*) _nnModel;
+    ModelBuilder* nn_model = (ModelBuilder*) _nnModel;
     delete(nn_model);
 }

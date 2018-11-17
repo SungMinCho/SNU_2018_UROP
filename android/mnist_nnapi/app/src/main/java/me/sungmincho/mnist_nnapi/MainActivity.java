@@ -46,6 +46,7 @@ import java.util.List;
 //public interface to the classification class, exposing a name and the recognize function
 import me.sungmincho.mnist_nnapi.models.Classifier;
 //contains logic for reading labels, creating classifier, and classifying
+import me.sungmincho.mnist_nnapi.models.NNAPIClassifier;
 import me.sungmincho.mnist_nnapi.models.TensorFlowClassifier;
 //class for drawing MNIST digits by finger
 import me.sungmincho.mnist_nnapi.views.DrawModel;
@@ -143,6 +144,11 @@ public class MainActivity extends Activity implements View.OnClickListener, View
                                     "input", "output", true));
                     mClassifiers.add(
                             TensorFlowClassifier.create(getAssets(), "Keras",
+                                    "opt_mnist_convnet-keras.pb", "labels.txt", PIXEL_WIDTH,
+                                    "conv2d_1_input", "dense_2/Softmax", false));
+
+                    mClassifiers.add(
+                            NNAPIClassifier.create(getAssets(), "NNAPI",
                                     "opt_mnist_convnet-keras.pb", "labels.txt", PIXEL_WIDTH,
                                     "conv2d_1_input", "dense_2/Softmax", false));
 
