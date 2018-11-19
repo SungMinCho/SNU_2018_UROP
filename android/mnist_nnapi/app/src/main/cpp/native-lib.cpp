@@ -39,7 +39,7 @@ Java_me_sungmincho_mnist_1nnapi_models_NNAPIClassifier_initModel(
     if (fd < 0) {
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
                             "Failed to open the model_data file descriptor.");
-        //return 0;
+        return 0;
     }
     ModelBuilder* nn_model = new ModelBuilder(length, PROT_READ, fd, offset);
     if (!nn_model->CreateCompiledModel()) {

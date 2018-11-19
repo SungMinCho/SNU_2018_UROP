@@ -19,6 +19,7 @@
 #include <android/sharedmem.h>
 #include <sys/mman.h>
 #include <string>
+#include <sstream>
 #include <unistd.h>
 #include <map>
 
@@ -40,15 +41,21 @@ void log_operand(Operand o) {
   __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, std::to_string(o.operandCode).c_str());
 }
 
-Operand::Operand(vector<uint32_t> dim, uint32_t index, OperandCode operandCode)
-    : Operand(dim, index, operandCode, -1, 0) {}
-Operand::Operand(vector<uint32_t> dim_, uint32_t index_, OperandCode operandCode_, size_t offset_, size_t length_) 
-  : dim(dim_), index(index_), operandCode(operandCode_), offset(offset_), length(length_) {
+Operand::Operand(vector<uint32_t*> &global_dim_arrays, vector<uint32_t> dim, uint32_t index, OperandCode operandCode)
+    : Operand(global_dim_arrays, dim, index, operandCode, -1, 0) {}
+Operand::Operand(vector<uint32_t*> &global_dim_arrays, vector<uint32_t> dim_, uint32_t index_, OperandCode operandCode_, size_t offset_, size_t length_)
+  : dim(dim_), index(index_), operandCode(operandCode_), isConstant(false), offset(offset_), length(length_) {
     uint32_t dimCount = dim.size();
     if(dimCount == 0) dim_array = nullptr;
     else {
         dim_array = new uint32_t[dimCount];
         for(int i = 0; i < dimCount; i++) dim_array[i] = dim[i];
+        global_dim_arrays.push_back(dim_array);
+        /*
+        std::ostringstream ss;
+        ss << "index " << index << " " << (void const*) dim_array;
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, ss.str().c_str());
+        */
     }
 
     type = {
@@ -59,6 +66,13 @@ Operand::Operand(vector<uint32_t> dim_, uint32_t index_, OperandCode operandCode
       .zeroPoint = 0
     };
 }
+
+void Operand::setConstant(void* buffer, size_t length) {
+  isConstant = true;
+  constant_value_buffer = buffer;
+  constant_value_buffer_length = length;
+}
+
 size_t Operand::byteLength() {
     // return byte length of this operand
     size_t bytesize = 1;
@@ -80,6 +94,59 @@ Operation::Operation(ANeuralNetworksOperationType operationType, vector<Operand>
                      Operand output) : operationType(operationType),
                                         inputs(inputs),
                                         output(output) {}
+
+void ModelBuilder::addOperand(int index, vector<uint32_t>& dim, OperandCode operandCode) {
+    operands[index] = Operand(global_dim_arrays, dim, index, operandCode);
+}
+
+void ModelBuilder::addOperand(int index, vector<uint32_t>& dim, OperandCode operandCode,
+                              size_t offset, size_t length) {
+    operands[index] = Operand(global_dim_arrays, dim, index, operandCode, offset, length);
+}
+
+void ModelBuilder::addConstantOperand(int index, vector<uint32_t>& dim, OperandCode operandCode,
+                                      void* buffer, size_t length) {
+    addOperand(index, dim, operandCode);
+    operands[index].setConstant(buffer, length); 
+}
+
+Operand& ModelBuilder::getOperand(int index) { return operands[index]; }
+
+void ModelBuilder::addFCLayer(int inputindex, int windex, int bindex, 
+                              int activationindex, int outputindex) {
+    Operand& input_operand = getOperand(inputindex);
+    Operand& w_operand = getOperand(windex);
+    Operand& b_operand = getOperand(bindex);
+    Operand& activation_operand = getOperand(activationindex);
+    Operand& output_operand = getOperand(outputindex);
+
+    vector<Operand> fc_inputs;
+    fc_inputs.push_back(input_operand);
+    fc_inputs.push_back(w_operand);
+    fc_inputs.push_back(b_operand);
+    fc_inputs.push_back(activation_operand);
+
+    Operation fc = Operation(ANEURALNETWORKS_FULLY_CONNECTED,
+            fc_inputs, output_operand);
+
+    operations.push_back(fc);
+}
+
+void ModelBuilder::addSoftmaxLayer(int inputindex, int betaindex, int outputindex) {
+  Operand& input_operand = getOperand(inputindex);
+  Operand& beta_operand = getOperand(betaindex);
+  Operand& output_operand = getOperand(outputindex);
+
+  vector<Operand> inputs;
+  inputs.push_back(input_operand);
+  inputs.push_back(beta_operand);
+
+  Operation softmax = Operation(ANEURALNETWORKS_SOFTMAX,
+      inputs, output_operand);
+
+  operations.push_back(softmax);
+}
+
 void ModelBuilder::parse(size_t size, int protect, int fd, size_t offset) {
     // ignore offset for now
     // suppose modelfile is an array of float value
@@ -94,39 +161,72 @@ void ModelBuilder::parse(size_t size, int protect, int fd, size_t offset) {
     }
     munmap(modelfilesave, size * sizeof(float));
     */
+    size_t fileread = 0;
+
     vector<uint32_t> input_dim = {1, 784};
-    input_operand = Operand(input_dim, 0, ANEURALNETWORKS_TENSOR_FLOAT32);
+    addOperand(0, input_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
+    input_operand = getOperand(0);
     input_index = 0;
 
-    vector<uint32_t> w1_dim = {10, 784};
-    Operand w1_operand = Operand(w1_dim, 1, ANEURALNETWORKS_TENSOR_FLOAT32);
+    vector<uint32_t> w1_dim = {100, 784};
+    addOperand(1, w1_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 100*784*4); 
+    fileread += 100*784*4;
 
-    vector<uint32_t> b1_dim = {10};
-    Operand b1_operand = Operand(b1_dim, 2, ANEURALNETWORKS_TENSOR_FLOAT32);
+    vector<uint32_t> b1_dim = {100};
+    addOperand(2, b1_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 100*4); 
+    fileread += 100*4;
 
     vector<uint32_t> activation_dim = {};
-    Operand activation_operand = Operand(activation_dim, 3, ANEURALNETWORKS_INT32);
+    FuseCode *fusecode = new FuseCode;
+    *fusecode = ANEURALNETWORKS_FUSED_NONE;
+    constants.push_back(fusecode);
+    addConstantOperand(3, activation_dim, ANEURALNETWORKS_INT32, fusecode, sizeof(*fusecode)); 
 
-    vector<uint32_t> w1out_dim = {1, 10};
-    output_operand = Operand(w1_dim, 4, ANEURALNETWORKS_TENSOR_FLOAT32);
-    output_index = 4;
+    vector<uint32_t> out1_dim = {1, 100};
+    addOperand(4, out1_dim, ANEURALNETWORKS_TENSOR_FLOAT32); 
 
-    operands.push_back(input_operand);
-    operands.push_back(w1_operand);
-    operands.push_back(b1_operand);
-    operands.push_back(activation_operand);
-    operands.push_back(output_operand);
+    addFCLayer(0, 1, 2, 3, 4);
+    
+    vector<uint32_t> w2_dim = {100, 100};
+    addOperand(5, w2_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 100*100*4); 
+    fileread += 100*100*4;
 
-    vector<Operand> fc1_inputs;
-    fc1_inputs.push_back(input_operand);
-    fc1_inputs.push_back(w1_operand);
-    fc1_inputs.push_back(b1_operand);
-    fc1_inputs.push_back(activation_operand);
+    vector<uint32_t> b2_dim = {100};
+    addOperand(6, b2_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 100*4); 
+    fileread += 100*4;
 
-    Operation fc1 = Operation(ANEURALNETWORKS_FULLY_CONNECTED,
-            fc1_inputs, output_operand);
+    vector<uint32_t> out2_dim = {1, 100};
+    addOperand(7, out2_dim, ANEURALNETWORKS_TENSOR_FLOAT32); 
 
-    operations.push_back(fc1);
+    addFCLayer(4, 5, 6, 3, 7);
+
+    vector<uint32_t> w3_dim = {10, 100};
+    addOperand(8, w3_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 10*100*4); 
+    fileread += 10*100*4;
+
+    vector<uint32_t> b3_dim = {10};
+    addOperand(9, b3_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 10*4); 
+    fileread += 10*4;
+
+    vector<uint32_t> out3_dim = {1, 10};
+    addOperand(10, out3_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
+    output_operand = getOperand(10);
+
+    addFCLayer(7, 8, 9, 3, 10);
+
+    vector<uint32_t> beta_dim = {};
+    float* beta_value = new float;
+    *beta_value = 1.0;
+    constants.push_back(beta_value);
+    addConstantOperand(11, beta_dim, ANEURALNETWORKS_FLOAT32, beta_value, sizeof(*beta_value));
+
+    vector<uint32_t> out4_dim = {1, 10};
+    addOperand(12, out4_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
+    output_operand = getOperand(12);
+    output_index = 12;
+
+    addSoftmaxLayer(10, 11, 12);
+
 }
 
 bool checkStatus(int32_t status, const char *msg) {
@@ -147,8 +247,7 @@ ModelBuilder::ModelBuilder(size_t size, int protect, int fd, size_t offset)
 
     constructSuccess = false;
     int32_t status = ANEURALNETWORKS_NO_ERROR;
-    //status = ANeuralNetworksMemory_createFromFd(size + offset, protect, fd, 0, &memoryModel_);
-    //status = ANeuralNetworksMemory_createFromFd(size, protect, fd, offset, &memoryModel_);
+    status = ANeuralNetworksMemory_createFromFd(size+offset, protect, fd, 0, &memoryModel_);
     if(!checkStatus(status, "create memory from fd failed")) return;
 
     inputTensorFd_ = ASharedMemory_create("input", input_operand.byteLength());
@@ -161,6 +260,13 @@ ModelBuilder::ModelBuilder(size_t size, int protect, int fd, size_t offset)
     status = ANeuralNetworksMemory_createFromFd(output_operand.byteLength(),
             PROT_READ, outputTensorFd_, 0, &memoryOutput_);
     if(!checkStatus(status, "output createfromfd failed")) return;
+
+    /*
+    std::ostringstream ss;
+    ss << "memoryInput_ " << (void const*) memoryInput_
+                          << " memoryOutput_ " << (void const*) memoryOutput_;
+    __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, ss.str().c_str());
+     */
 
     constructSuccess = true;
 }
@@ -181,7 +287,8 @@ bool ModelBuilder::CreateCompiledModel() {
     std::map<uint32_t, uint32_t> indexDict;
     uint32_t opIndex = 0;
 
-    for(Operand o : operands) {
+    for(auto &i : operands) {
+      Operand o = i.second;
       indexDict[o.index] = opIndex++;
 
       status = ANeuralNetworksModel_addOperand(model_, &o.type);
@@ -193,20 +300,14 @@ bool ModelBuilder::CreateCompiledModel() {
          if(!checkStatus(status, "set operand value from memory failed")) return false;
       }
       else {
-          if(o.index == input_index || o.index == output_index) continue;
+          if(o.isConstant == true) {
+            status = ANeuralNetworksModel_setOperandValue(model_, indexDict[o.index],
+                o.constant_value_buffer, o.constant_value_buffer_length);
+            if(!checkStatus(status, "set operand value failed")) return false;
+          }
           if(o.index == 3) {
             // naively take care of activation
-            FuseCode fusedActivationCodeValue = ANEURALNETWORKS_FUSED_NONE;
-            ANeuralNetworksModel_setOperandValue(model_, indexDict[o.index],
-                &fusedActivationCodeValue, sizeof(fusedActivationCodeValue));
-            continue;
           }
-          int len = o.byteLength();
-          // random
-          char buffer[len];
-          status = ANeuralNetworksModel_setOperandValue(model_, indexDict[o.index],
-              buffer, len);
-          if(!checkStatus(status, "set operand value failed")) return false;
       }
     }
 
@@ -276,12 +377,16 @@ bool ModelBuilder::Compute(float *input, float *output) {
     // second argument 0 means the 0th (first) input from model Input list
     // right now we only have one input
     // but why is type nullptr...
-    status = ANeuralNetworksExecution_setInputFromMemory(execution, 0, nullptr,
-            memoryInput_, 0, input_operand.byteLength());
+    //status = ANeuralNetworksExecution_setInputFromMemory(execution, 0, nullptr,
+    //        memoryInput_, 0, input_operand.byteLength());
+    status = ANeuralNetworksExecution_setInput(execution, 0, nullptr,
+            input, input_operand.byteLength());
     if(!checkStatus(status, "set input from memory failed")) return false;
 
-    status = ANeuralNetworksExecution_setOutputFromMemory(execution, 0, nullptr,
-            memoryOutput_, 0, output_operand.byteLength());
+    //status = ANeuralNetworksExecution_setOutputFromMemory(execution, 0, nullptr,
+    //        memoryOutput_, 0, output_operand.byteLength());
+    status = ANeuralNetworksExecution_setOutput(execution, 0, nullptr,
+            output, output_operand.byteLength());
     if(!checkStatus(status, "set output from memory failed")) return false;
 
     ANeuralNetworksEvent *event = nullptr;
@@ -294,13 +399,16 @@ bool ModelBuilder::Compute(float *input, float *output) {
     ANeuralNetworksEvent_free(event);
     ANeuralNetworksExecution_free(execution);
 
+
     float *outputTensorPtr = reinterpret_cast<float *>(mmap(nullptr, output_operand.byteLength(),
             PROT_READ, MAP_SHARED, outputTensorFd_, 0));
 
     for(int i = 0; i < output_operand.dataLength(); i++) {
-      output[i] = outputTensorPtr[i];
+      //output[i] = outputTensorPtr[i];
     }
+
     munmap(outputTensorPtr, output_operand.byteLength());
+
 
     return true;
 }
@@ -313,4 +421,8 @@ ModelBuilder::~ModelBuilder() {
     ANeuralNetworksMemory_free(memoryOutput_);
     close(inputTensorFd_);
     close(outputTensorFd_);
+
+    for(auto &d : global_dim_arrays) delete[] d;
+    for(auto &c : constants) delete c;
+    for(auto &c : constant_arrays) delete[] c;
 }

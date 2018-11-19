@@ -19,26 +19,35 @@
 
 #include <android/NeuralNetworks.h>
 #include <vector>
+#include <map>
 
 #define LOG_TAG "MNIST_NNAPI"
 
 using std::vector;
+using std::map;
 
 class Operand {
 public:
     Operand() {};
-    explicit Operand(vector<uint32_t> dim, uint32_t index, OperandCode operandCode);
-    explicit Operand(vector<uint32_t> dim, uint32_t index, OperandCode operandCode, size_t offset, size_t length);
+    explicit Operand(vector<uint32_t*> &global_dim_arrays, vector<uint32_t> dim, uint32_t index, OperandCode operandCode);
+    explicit Operand(vector<uint32_t*> &global_dim_arrays, vector<uint32_t> dim, uint32_t index, OperandCode operandCode, size_t offset, size_t length);
     ~Operand() {};
+
+    void setConstant(void* buffer, size_t length);
 
     vector<uint32_t> dim;
     uint32_t* dim_array;
     ANeuralNetworksOperandType type;
     uint32_t index;
     OperandCode operandCode;
-    // offset = -1 means it's a constant whose value is in memory (offset ~ offset + length)
+
+    bool isConstant;
+    // offset and length in the file if this is not constant and the value is in a file
     size_t offset;
     size_t length;
+    // buffer and length if it is constant
+    void* constant_value_buffer;
+    size_t constant_value_buffer_length;
 
     size_t byteLength();
     size_t dataLength();
@@ -62,19 +71,28 @@ public:
     explicit ModelBuilder(size_t size, int protect, int fd, size_t offset);
     ~ModelBuilder();
 
-		void parse(size_t size, int protect, int fd, size_t offset);
+    void addOperand(int index, vector<uint32_t>& dim, OperandCode operandCode);
+    void addOperand(int index, vector<uint32_t>& dim, OperandCode operandCode, size_t offset, size_t length);
+    void addConstantOperand(int index, vector<uint32_t>& dim, OperandCode operandCode, void* buffer, size_t length);
+    Operand& getOperand(int index);
+    void addFCLayer(int inputindex, int windex, int bindex, int activationindex, int outputindex);
+    void addSoftmaxLayer(int inputindex, int betaindex, int outputindex);
+    void parse(size_t size, int protect, int fd, size_t offset);
     bool CreateCompiledModel();
     // Rigiht now we suppose input = float[] , output = float[]
     bool Compute(float* input, float* output);
 
 private:
-    vector<Operand> operands;
+    map<int, Operand> operands;
     vector<Operation> operations;
     Operand input_operand;
     Operand output_operand;
     uint32_t input_index;
     uint32_t output_index;
 
+    vector<uint32_t*> global_dim_arrays;
+    vector<void*> constants;
+    vector<void*> constant_arrays;
     bool constructSuccess;
 
     ANeuralNetworksModel *model_;

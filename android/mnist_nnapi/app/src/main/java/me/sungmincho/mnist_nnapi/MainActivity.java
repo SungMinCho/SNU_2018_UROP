@@ -149,7 +149,7 @@ public class MainActivity extends Activity implements View.OnClickListener, View
 
                     mClassifiers.add(
                             NNAPIClassifier.create(getAssets(), "NNAPI",
-                                    "opt_mnist_convnet-keras.pb", "labels.txt", PIXEL_WIDTH,
+                                    "weights.bin", "labels.txt", PIXEL_WIDTH,
                                     "conv2d_1_input", "dense_2/Softmax", false));
 
                 } catch (final Exception e) {
