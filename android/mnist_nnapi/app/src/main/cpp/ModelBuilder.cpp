@@ -147,6 +147,23 @@ void ModelBuilder::addSoftmaxLayer(int inputindex, int betaindex, int outputinde
   operations.push_back(softmax);
 }
 
+void ModelBuilder::addAddLyaer(int input1index, int input2index, int activationindex,
+                               int outputindex) {
+    Operand& input1 = getOperand(input1index);
+    Operand& input2 = getOperand(input2index);
+    Operand& activation = getOperand(activationindex);
+    Operand& output = getOperand(outputindex);
+
+    vector<Operand> inputs;
+    inputs.push_back(input1);
+    inputs.push_back(input2);
+    inputs.push_back(activation);
+
+    Operation add = Operation(ANEURALNETWORKS_ADD, inputs, output);
+
+    operations.push_back(add);
+}
+
 void ModelBuilder::parse(size_t size, int protect, int fd, size_t offset) {
     // ignore offset for now
     // suppose modelfile is an array of float value
@@ -161,7 +178,7 @@ void ModelBuilder::parse(size_t size, int protect, int fd, size_t offset) {
     }
     munmap(modelfilesave, size * sizeof(float));
     */
-    size_t fileread = 0;
+    size_t fileread = offset;
 
     vector<uint32_t> input_dim = {1, 784};
     addOperand(0, input_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
@@ -176,17 +193,17 @@ void ModelBuilder::parse(size_t size, int protect, int fd, size_t offset) {
     addOperand(2, b1_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 100*4); 
     fileread += 100*4;
 
-    vector<uint32_t> activation_dim = {};
+    vector<uint32_t> relu_activation_dim = {};
     FuseCode *fusecode = new FuseCode;
-    *fusecode = ANEURALNETWORKS_FUSED_NONE;
+    *fusecode = ANEURALNETWORKS_FUSED_RELU;
     constants.push_back(fusecode);
-    addConstantOperand(3, activation_dim, ANEURALNETWORKS_INT32, fusecode, sizeof(*fusecode)); 
+    addConstantOperand(3, relu_activation_dim, ANEURALNETWORKS_INT32, fusecode, sizeof(*fusecode));
 
     vector<uint32_t> out1_dim = {1, 100};
-    addOperand(4, out1_dim, ANEURALNETWORKS_TENSOR_FLOAT32); 
+    addOperand(4, out1_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
 
     addFCLayer(0, 1, 2, 3, 4);
-    
+
     vector<uint32_t> w2_dim = {100, 100};
     addOperand(5, w2_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 100*100*4); 
     fileread += 100*100*4;
@@ -207,26 +224,32 @@ void ModelBuilder::parse(size_t size, int protect, int fd, size_t offset) {
     vector<uint32_t> b3_dim = {10};
     addOperand(9, b3_dim, ANEURALNETWORKS_TENSOR_FLOAT32, fileread, 10*4); 
     fileread += 10*4;
+    __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "fileread");
+    __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, std::to_string(fileread).c_str());
+
+    vector<uint32_t> no_activation_dim = {};
+    FuseCode *fusecodenone = new FuseCode;
+    *fusecodenone = ANEURALNETWORKS_FUSED_NONE;
+    constants.push_back(fusecodenone);
+    addConstantOperand(10, no_activation_dim, ANEURALNETWORKS_INT32, fusecodenone, sizeof(*fusecodenone));
 
     vector<uint32_t> out3_dim = {1, 10};
-    addOperand(10, out3_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
-    output_operand = getOperand(10);
+    addOperand(11, out3_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
 
-    addFCLayer(7, 8, 9, 3, 10);
+    addFCLayer(7, 8, 9, 10, 11);
 
     vector<uint32_t> beta_dim = {};
     float* beta_value = new float;
     *beta_value = 1.0;
     constants.push_back(beta_value);
-    addConstantOperand(11, beta_dim, ANEURALNETWORKS_FLOAT32, beta_value, sizeof(*beta_value));
+    addConstantOperand(12, beta_dim, ANEURALNETWORKS_FLOAT32, beta_value, sizeof(*beta_value));
 
     vector<uint32_t> out4_dim = {1, 10};
-    addOperand(12, out4_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
-    output_operand = getOperand(12);
-    output_index = 12;
+    addOperand(13, out4_dim, ANEURALNETWORKS_TENSOR_FLOAT32);
+    output_operand = getOperand(13);
+    output_index = 13;
 
-    addSoftmaxLayer(10, 11, 12);
-
+    addSoftmaxLayer(11, 12, 13);
 }
 
 bool checkStatus(int32_t status, const char *msg) {
@@ -247,6 +270,9 @@ ModelBuilder::ModelBuilder(size_t size, int protect, int fd, size_t offset)
 
     constructSuccess = false;
     int32_t status = ANEURALNETWORKS_NO_ERROR;
+    std::ostringstream ss;
+    ss << "size " << size << " offset " << offset;
+    __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, ss.str().c_str());
     status = ANeuralNetworksMemory_createFromFd(size+offset, protect, fd, 0, &memoryModel_);
     if(!checkStatus(status, "create memory from fd failed")) return;
 
@@ -254,11 +280,11 @@ ModelBuilder::ModelBuilder(size_t size, int protect, int fd, size_t offset)
     outputTensorFd_ = ASharedMemory_create("output", output_operand.byteLength());
 
     status = ANeuralNetworksMemory_createFromFd(input_operand.byteLength(),
-            PROT_READ, inputTensorFd_, 0, &memoryInput_);
+            PROT_READ | PROT_WRITE, inputTensorFd_, 0, &memoryInput_);
     if(!checkStatus(status, "input createfromfd failed")) return;
 
     status = ANeuralNetworksMemory_createFromFd(output_operand.byteLength(),
-            PROT_READ, outputTensorFd_, 0, &memoryOutput_);
+            PROT_READ | PROT_WRITE, outputTensorFd_, 0, &memoryOutput_);
     if(!checkStatus(status, "output createfromfd failed")) return;
 
     /*
@@ -369,8 +395,8 @@ bool ModelBuilder::Compute(float *input, float *output) {
             PROT_READ | PROT_WRITE, MAP_SHARED, inputTensorFd_, 0));
     float *inputTensorPtrSave = inputTensorPtr;
     for(int i = 0; i < input_operand.dataLength(); i++) {
-      *inputTensorPtr = input[i];
-      inputTensorPtr++;
+      //*inputTensorPtr = input[i];
+      //inputTensorPtr++;
     }
     munmap(inputTensorPtrSave, input_operand.byteLength());
 
@@ -404,7 +430,8 @@ bool ModelBuilder::Compute(float *input, float *output) {
             PROT_READ, MAP_SHARED, outputTensorFd_, 0));
 
     for(int i = 0; i < output_operand.dataLength(); i++) {
-      //output[i] = outputTensorPtr[i];
+        //output[i] = outputTensorPtr[i];
+        //output[i] = output_buffer[i];
     }
 
     munmap(outputTensorPtr, output_operand.byteLength());

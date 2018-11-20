@@ -77,6 +77,7 @@ public:
     Operand& getOperand(int index);
     void addFCLayer(int inputindex, int windex, int bindex, int activationindex, int outputindex);
     void addSoftmaxLayer(int inputindex, int betaindex, int outputindex);
+    void addAddLyaer(int input1index, int input2index, int activationindex, int outputindex);
     void parse(size_t size, int protect, int fd, size_t offset);
     bool CreateCompiledModel();
     // Rigiht now we suppose input = float[] , output = float[]
