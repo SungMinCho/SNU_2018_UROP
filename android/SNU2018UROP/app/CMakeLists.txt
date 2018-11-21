@@ -10,6 +10,8 @@ cmake_minimum_required(VERSION 3.4.1)
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=format-security")
+
 add_library( # Sets the name of the library.
         native-lib
 
@@ -17,6 +19,7 @@ add_library( # Sets the name of the library.
         SHARED
 
         # Provides a relative path to your source file(s).
+        src/main/cpp/ModelBuilder.cpp
         src/main/cpp/native-lib.cpp)
 
 # Searches for a specified prebuilt library and stores the path as a
@@ -41,4 +44,6 @@ target_link_libraries( # Specifies the target library.
 
         # Links the target library to the log library
         # included in the NDK.
+        android
+        neuralnetworks
         ${log-lib})

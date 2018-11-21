@@ -84,13 +84,15 @@ public class Camera2BasicFragment extends Fragment
   private boolean checkedPermissions = false;
   private TextView textView;
   private ImageView smallView;
-  private ImageClassifier classifier;
+  private Classifier classifier;
 
   /** Max preview width that is guaranteed by Camera2 API */
   private static final int MAX_PREVIEW_WIDTH = 1920;
 
   /** Max preview height that is guaranteed by Camera2 API */
   private static final int MAX_PREVIEW_HEIGHT = 1080;
+
+  private static boolean use_nnapi = true;
 
   /**
    * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a {@link
@@ -313,7 +315,8 @@ public class Camera2BasicFragment extends Fragment
   public void onActivityCreated(Bundle savedInstanceState) {
     super.onActivityCreated(savedInstanceState);
     try {
-      classifier = new ImageClassifier(getActivity());
+      if(!use_nnapi) classifier = new ImageClassifier(getActivity());
+      else classifier = new NNAPI_Classifier(getActivity());
     } catch (IOException e) {
       Log.e(TAG, "Failed to initialize an image classifier.");
     }

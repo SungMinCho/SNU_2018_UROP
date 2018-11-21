@@ -25,9 +25,15 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
     aaptOptions {
         noCompress "tflite"
         noCompress "lite"
+        noCompress "bin", "txt", "pb"
     }
 
     compileOptions {

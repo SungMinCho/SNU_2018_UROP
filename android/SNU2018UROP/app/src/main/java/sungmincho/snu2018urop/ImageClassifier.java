@@ -37,7 +37,7 @@ import java.util.PriorityQueue;
 import org.tensorflow.lite.Interpreter;
 
 /** Classifies images with Tensorflow Lite. */
-public class ImageClassifier {
+public class ImageClassifier implements Classifier {
 
   /** Tag for the {@link Log}. */
   private static final String TAG = "TfLiteCameraDemo";
@@ -106,7 +106,8 @@ public class ImageClassifier {
   }
 
   /** Classifies a frame from the preview stream. */
-  String classifyFrame(Bitmap bitmap) {
+  @Override
+  public String classifyFrame(Bitmap bitmap) {
     if (tflite == null) {
       Log.e(TAG, "Image classifier has not been initialized; Skipped.");
       return "Uninitialized Classifier.";
@@ -152,6 +153,7 @@ public class ImageClassifier {
   }
 
   /** Closes tflite to release resources. */
+  @Override
   public void close() {
     tflite.close();
     tflite = null;
